@@ -1,0 +1,8 @@
+packages:
+  - apps/frontend
+  - apps/backend
+  - packages/shared
+onlyBuiltDependencies:
+  - argon2
+  - esbuild
+  - workerd

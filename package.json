@@ -1,0 +1,13 @@
+{
+  "name": "wallet-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.12.1",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "pnpm --filter @wallet/shared build && pnpm --filter @wallet/backend build && pnpm --filter @wallet/frontend build",
+    "typecheck": "pnpm --filter @wallet/shared typecheck && pnpm --filter @wallet/backend typecheck && pnpm --filter @wallet/frontend typecheck",
+    "test": "pnpm --filter @wallet/backend test && pnpm --filter @wallet/frontend test",
+    "lint": "pnpm --filter @wallet/backend lint && pnpm --filter @wallet/frontend lint"
+  }
+}
