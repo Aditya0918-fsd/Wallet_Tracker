@@ -1,11 +1,6 @@
-import { defineVitestConfig } from "@usehercules/vite-tanstack/vitest";
 import { defineConfig } from 'vite'
-import { nitro } from 'nitro/vite'
-// ...keep your existing imports
+import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  plugins: [
-    // ...keep your existing plugins (tanstackStart, viteReact, etc.)
-    nitro({ preset: 'vercel' }),
-  ],
+  plugins: [react()],
 })
