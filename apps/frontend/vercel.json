@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://wallet-tracker-api-f843.onrender.com/api/:path*"
+    }
+  ]
+}
