@@ -14,6 +14,10 @@
       "continue": true
     },
     {
+      "src": "^\\/api(?:\\/(?<_0>(?:[\\s\\S]*[^/])?\\/*?))??\\/?$",
+      "dest": "https://wallet-tracker-api-f843.onrender.com/api/$1"
+    },
+    {
       "handle": "filesystem"
     },
     {

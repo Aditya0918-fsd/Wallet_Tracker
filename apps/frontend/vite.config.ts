@@ -6,7 +6,18 @@ const onVercel = Boolean(process.env.VERCEL) || process.env.NITRO_PRESET === "ve
 export default defineConfig({
   cloudflare: onVercel ? false : undefined,
   vite: {
-    plugins: onVercel ? [nitro({ preset: "vercel" })] : [],
+    plugins: onVercel
+      ? [
+          nitro({
+            preset: "vercel",
+            routeRules: {
+              "/api/**": {
+                proxy: "https://wallet-tracker-api-f843.onrender.com/api/**",
+              },
+            },
+          }),
+        ]
+      : [],
     server: {
       proxy: {
         "/api": { target: "http://localhost:3001", changeOrigin: true },

@@ -1,5 +1,5 @@
 globalThis.__nitro_main__ = import.meta.url;
-import { H3Core, HTTPError, NodeResponse, composeMiddleware, createMatcherFromFind, defineHandler, defineLazyEventHandler, headers, memoizeRouteRulesMatcher, toEventHandler } from "./_libs/h3+rou3+srvx.mjs";
+import { H3Core, HTTPError, NodeResponse, composeMiddleware, createMatcherFromFind, defineHandler, defineLazyEventHandler, headers, memoizeRouteRulesMatcher, proxy, toEventHandler } from "./_libs/h3+rou3+srvx.mjs";
 // ../../node_modules/.pnpm/nitro@3.0.261103-rc/node_modules/nitro/dist/runtime/internal/polyfills/fast-response.mjs
 if (globalThis.Response !== NodeResponse) globalThis.Response = NodeResponse;
 // ../../node_modules/.pnpm/nitro@3.0.261103-rc/node_modules/nitro/dist/presets/vercel/runtime/isr.mjs
@@ -22,6 +22,18 @@ var static_missing_default = defineHandler(() => {
 // #nitro/virtual/routing
 var findRouteRules = /* @__PURE__ */ (() => {
 	const $0 = {
+		route: "/api/**",
+		rank: 0,
+		rules: [{
+			name: "proxy",
+			route: "/api/**",
+			handler: proxy,
+			options: {
+				"to": "https://wallet-tracker-api-f843.onrender.com/api/**",
+				"base": "/api"
+			}
+		}]
+	}, $1 = {
 		route: "/assets/**",
 		rank: 0,
 		rules: [{
@@ -38,14 +50,24 @@ var findRouteRules = /* @__PURE__ */ (() => {
 		let l = s.length;
 		let _w;
 		if (l > 1) {
-			if (s[1] === "assets") r.push(l > 2 ? {
+			if (s[1] === "api") r.push(l > 2 ? {
 				data: $0,
+				params: {
+					"0": _w = p.slice(5),
+					_: _w
+				}
+			} : {
+				data: $0,
+				params: {}
+			});
+			else if (s[1] === "assets") r.push(l > 2 ? {
+				data: $1,
 				params: {
 					"0": _w = p.slice(8),
 					_: _w
 				}
 			} : {
-				data: $0,
+				data: $1,
 				params: {}
 			});
 		}

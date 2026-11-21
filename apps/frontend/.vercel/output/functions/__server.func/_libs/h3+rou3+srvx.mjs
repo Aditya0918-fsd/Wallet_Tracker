@@ -326,6 +326,31 @@ var NullProtoObj = /* @__PURE__ */ (() => {
 	return e.prototype = Object.create(null), Object.freeze(e.prototype), e;
 })();
 // ../../node_modules/.pnpm/h3@2.0.8_crossws@0.4.17_srvx@1.0.8__ocache@0.3.2/node_modules/h3/dist/response.mjs
+function withoutTrailingSlash(path) {
+	if (!path || path === "/") return "/";
+	return path[path.length - 1] === "/" ? path.slice(0, -1) : path;
+}
+function joinURL(base, path) {
+	if (!path || path === "/") return base || "/";
+	if (!base) return path;
+	const segment = path.replace(JOIN_LEADING_SLASH_RE, "");
+	return (base[base.length - 1] === "/" ? base : base + "/") + segment;
+}
+var JOIN_LEADING_SLASH_RE = /^\//;
+function stripBase(pathname, base) {
+	if (pathname === base || pathname.startsWith(base + "/") || pathname.startsWith(base + "?")) return "/" + pathname.slice(base.length).replace(/^\/+/, "");
+	return pathname;
+}
+function withoutBase(input = "", base = "") {
+	if (!base || base === "/") return input;
+	return stripBase(input, withoutTrailingSlash(base));
+}
+var AUTHORITY_RE$1 = /^(?:[a-z][a-z\d+.-]*:)?\/\//i;
+function getURLPathname(input) {
+	const path = AUTHORITY_RE$1.test(input) ? input.replace(AUTHORITY_RE$1, "").replace(/^[^/?#]*/, "") : input;
+	const end = path.search(/[#?]/);
+	return end === -1 ? path : path.slice(0, end);
+}
 var NEEDLESS_ESCAPE_SRC = String.raw`%(?:2[146-9A-E]|3[0-9ABD]|4[0-9A-F]|5[0-9ABDF]|6[1-9A-F]|7[0-9ACE])`;
 var NEEDLESS_ESCAPE_RE = /* @__PURE__ */ new RegExp(NEEDLESS_ESCAPE_SRC, "i");
 var NEEDLESS_ESCAPE_RE_G = /* @__PURE__ */ new RegExp(NEEDLESS_ESCAPE_SRC, "gi");
@@ -581,14 +606,14 @@ function prepareResponse(val, event, config, nested) {
 		return new NodeResponse(nullBody(event.req.method, status) ? null : res.body, {
 			status,
 			statusText: rawStatusText === void 0 ? void 0 : sanitizeStatusMessage(rawStatusText),
-			headers: res.headers && preparedHeaders ? mergeHeaders(res.headers, preparedHeaders) : res.headers || preparedHeaders
+			headers: res.headers && preparedHeaders ? mergeHeaders$1(res.headers, preparedHeaders) : res.headers || preparedHeaders
 		});
 	}
 	if (val.status >= 400) preparedHeaders = preparedRes?.[kEventResErrHeaders];
 	if (preparedHeaders && !nested && !preparedHeaders.keys().next().done) return new NodeResponse(nullBody(event.req.method, val.status) ? null : val.body, {
 		status: val.status,
 		statusText: val.statusText,
-		headers: mergeHeaders(val.headers, preparedHeaders)
+		headers: mergeHeaders$1(val.headers, preparedHeaders)
 	});
 	return event.req.method === "HEAD" && val.body !== null ? new NodeResponse(null, {
 		status: val.status,
@@ -596,7 +621,7 @@ function prepareResponse(val, event, config, nested) {
 		headers: val.headers
 	}) : val;
 }
-function mergeHeaders(base, overrides, target = new Headers(base)) {
+function mergeHeaders$1(base, overrides, target = new Headers(base)) {
 	for (const [name, value] of overrides) if (name === "set-cookie") target.append(name, value);
 	else target.set(name, value);
 	return target;
@@ -654,8 +679,8 @@ function nullBody(method, status) {
 	return method === "HEAD" || status === 100 || status === 101 || status === 102 || status === 204 || status === 205 || status === 304;
 }
 function errorResponse(error, debug, errHeaders) {
-	let headers = error.headers ? mergeHeaders(jsonHeaders, error.headers) : new Headers(jsonHeaders);
-	if (errHeaders) headers = mergeHeaders(headers, errHeaders);
+	let headers = error.headers ? mergeHeaders$1(jsonHeaders, error.headers) : new Headers(jsonHeaders);
+	if (errHeaders) headers = mergeHeaders$1(headers, errHeaders);
 	return new NodeResponse(JSON.stringify({
 		...error.toJSON(),
 		stack: debug && error.stack ? error.stack.split("\n").map((l) => l.trim()) : void 0
@@ -813,6 +838,246 @@ function routeHandler(route) {
 	if (!data) return NoHandler;
 	return data.middleware?.length ? data["~composed"] ??= composeHandler(data.middleware, data.handler) : data.handler;
 }
+// ../../node_modules/.pnpm/h3@2.0.8_crossws@0.4.17_srvx@1.0.8__ocache@0.3.2/node_modules/h3/dist/proxy.mjs
+var ignoredHeaders = /* @__PURE__ */ new Set([
+	"transfer-encoding",
+	"accept-encoding",
+	"connection",
+	"keep-alive",
+	"upgrade",
+	"expect",
+	"te",
+	"trailer",
+	"host",
+	"proxy-authorization",
+	"proxy-connection"
+]);
+var framingHeaders = /* @__PURE__ */ new Set([
+	"connection",
+	"keep-alive",
+	"transfer-encoding",
+	"te",
+	"trailer",
+	"upgrade",
+	"proxy-authorization",
+	"proxy-connection"
+]);
+function connectionTokens(connection) {
+	return new Set((connection || "").toLowerCase().split(",").map((name) => name.trim()).filter(Boolean));
+}
+var ignoredResponseHeaders = /* @__PURE__ */ new Set([
+	"content-encoding",
+	"content-length",
+	"transfer-encoding",
+	"connection",
+	"keep-alive",
+	"proxy-authenticate",
+	"proxy-connection",
+	"upgrade",
+	"trailer",
+	"te"
+]);
+function rewriteCookieProperty(header, map, property) {
+	const _map = typeof map === "string" ? { "*": map } : map;
+	return header.replace(new RegExp(`(;\\s*${property}=)([^;]+)`, "gi"), (match, prefix, previousValue) => {
+		let newValue;
+		if (Object.hasOwn(_map, previousValue)) newValue = _map[previousValue];
+		else if (Object.hasOwn(_map, "*")) newValue = _map["*"];
+		else return match;
+		return newValue ? prefix + newValue : "";
+	});
+}
+function applyXForwardedHeaders(headers, event) {
+	const merged = headers instanceof Headers ? headers : new Headers(headers);
+	const ip = event.req.ip;
+	if (ip) {
+		const forwardedFor = merged.get("x-forwarded-for");
+		merged.set("x-forwarded-for", forwardedFor ? `${forwardedFor}, ${ip}` : ip);
+	}
+	const proto = event.url.protocol.slice(0, -1);
+	merged.set("x-forwarded-proto", proto);
+	merged.set("x-forwarded-host", event.url.host);
+	merged.set("x-forwarded-port", event.url.port || (proto === "https" ? "443" : "80"));
+	return merged;
+}
+function rewriteLocationHeaders(headers, rewrite, targetOrigin, requestOrigin) {
+	const rewriteValue = (value) => rewrite === true ? rewriteOrigin(value, targetOrigin, requestOrigin) : rewritePrefix(value, rewrite);
+	const location = headers.get("location");
+	if (location) {
+		const rewritten = rewriteValue(location);
+		if (rewritten) headers.set("location", rewritten);
+	}
+	const refresh = headers.get("refresh");
+	if (refresh) {
+		const match = refresh.match(/^(\s*(?:[\d.]+\s*[;,]\s*)?url\s*=\s*)(['"]?)(.*?)\2(\s*)$/i);
+		const rewritten = match && rewriteValue(match[3]);
+		if (rewritten) headers.set("refresh", match[1] + match[2] + rewritten + match[2] + match[4]);
+	}
+}
+function rewriteOrigin(value, targetOrigin, requestOrigin) {
+	if (!targetOrigin || targetOrigin === requestOrigin) return;
+	const url = value.startsWith("//") ? URL.canParse(value, targetOrigin) ? new URL(value, targetOrigin) : void 0 : URL.canParse(value) ? new URL(value) : void 0;
+	if (!url || url.origin !== targetOrigin) return;
+	return requestOrigin + url.pathname + url.search + url.hash;
+}
+function rewritePrefix(value, map) {
+	for (const prefix of Object.keys(map)) if (value.startsWith(prefix)) return map[prefix] + value.slice(prefix.length);
+}
+function abortable(run, signal) {
+	if (signal.aborted) return Promise.reject(signal.reason);
+	return new Promise((resolve, reject) => {
+		const onAbort = () => reject(signal.reason);
+		signal.addEventListener("abort", onAbort, { once: true });
+		Promise.resolve(run()).then((value) => {
+			signal.removeEventListener("abort", onAbort);
+			resolve(value);
+		}, (error) => {
+			signal.removeEventListener("abort", onAbort);
+			reject(error);
+		});
+	});
+}
+function mergeHeaders(defaults, ...inputs) {
+	const _inputs = inputs.filter(Boolean);
+	if (_inputs.length === 0) return defaults;
+	const merged = new Headers(defaults);
+	for (const input of _inputs) {
+		const entries = Array.isArray(input) ? input : typeof input.entries === "function" ? input.entries() : Object.entries(input);
+		for (const [key, value] of entries) if (value !== void 0) merged.set(key, value);
+	}
+	return merged;
+}
+async function proxyRequest(event, target, opts = {}) {
+	const method = opts.fetchOptions?.method || event.req.method;
+	const methodUpper = method.toUpperCase();
+	const incomingBody = event.req.body;
+	const requestBody = incomingBody != null && methodUpper !== "GET" && methodUpper !== "HEAD" ? incomingBody : void 0;
+	const proxyHeaders = getProxyRequestHeaders(event, {
+		host: target.startsWith("/"),
+		forwardHeaders: opts.forwardHeaders,
+		filterHeaders: opts.filterHeaders
+	});
+	const fetchHeaders = mergeHeaders(opts.xfwd ? applyXForwardedHeaders(proxyHeaders, event) : proxyHeaders, opts.fetchOptions?.headers, opts.headers);
+	if (opts.fetchOptions && "body" in opts.fetchOptions || incomingBody && !requestBody) {
+		if (fetchHeaders instanceof Headers) fetchHeaders.delete("content-length");
+		else if (!Array.isArray(fetchHeaders)) delete fetchHeaders["content-length"];
+	}
+	const fetchBody = opts.fetchOptions?.body ?? requestBody;
+	return proxy$1(event, target, {
+		...opts,
+		fetchOptions: {
+			method,
+			body: requestBody,
+			...opts.fetchOptions,
+			duplex: opts.fetchOptions?.duplex ?? (fetchBody != null ? "half" : void 0),
+			headers: fetchHeaders
+		}
+	});
+}
+async function proxy$1(event, target, opts = {}) {
+	const signals = [event.req.signal];
+	if (opts.fetchOptions?.signal) signals.push(opts.fetchOptions.signal);
+	let timeoutId;
+	if (opts.timeout > 0 && Number.isFinite(opts.timeout)) {
+		const timeoutController = new AbortController();
+		timeoutId = setTimeout(() => timeoutController.abort(new DOMException("Proxy request timed out", "TimeoutError")), Math.min(Math.max(Math.trunc(opts.timeout), 1), 2147483647));
+		signals.push(timeoutController.signal);
+	}
+	const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
+	const fetchOptions = {
+		headers: opts.headers,
+		...opts.fetchOptions,
+		redirect: opts.fetchOptions?.redirect ?? "manual",
+		signal
+	};
+	let response;
+	try {
+		response = target[0] === "/" ? await abortable(() => event.app.fetch(createSubRequest(event, target, fetchOptions)), signal) : await fetch(target, fetchOptions);
+	} catch (error) {
+		if ((signal.aborted ? signal.reason : void 0)?.name === "TimeoutError" || error?.name === "TimeoutError") throw new HTTPError({
+			status: 504,
+			statusText: "Gateway Timeout",
+			cause: error
+		});
+		if (signal.aborted || error?.name === "AbortError") {
+			if (opts.propagateAbortError) throw error;
+			if (event.req.signal.aborted) return new HTTPResponse(null, {
+				status: 499,
+				statusText: "Client Closed Request"
+			});
+		}
+		throw new HTTPError("Bad Gateway", {
+			status: 502,
+			statusText: "Bad Gateway",
+			cause: error
+		});
+	} finally {
+		if (timeoutId !== void 0) clearTimeout(timeoutId);
+	}
+	if (response.type === "opaqueredirect") throw new HTTPError({
+		status: 502,
+		message: "Cannot relay an opaque redirect response on this runtime. Set `fetchOptions: { redirect: \"follow\" }` to follow upstream redirects instead."
+	});
+	if (response.type === "opaque" || response.type === "error" || response.status === 0) throw new HTTPError({
+		status: 502,
+		message: "Cannot relay an opaque or errored upstream response (status 0), typically caused by a `no-cors` request mode on browser/service-worker runtimes."
+	});
+	const headers = new Headers();
+	const connectionNominated = connectionTokens(response.headers.get("connection"));
+	for (const [key, value] of response.headers.entries()) {
+		if (ignoredResponseHeaders.has(key) || connectionNominated.has(key) || key === "set-cookie") continue;
+		headers.append(key, value);
+	}
+	const cookies = response.headers.getSetCookie();
+	if (cookies.length > 0) {
+		const _cookies = cookies.map((cookie) => {
+			if (opts.cookieDomainRewrite) cookie = rewriteCookieProperty(cookie, opts.cookieDomainRewrite, "domain");
+			if (opts.cookiePathRewrite) cookie = rewriteCookieProperty(cookie, opts.cookiePathRewrite, "path");
+			return cookie;
+		});
+		for (const cookie of _cookies) headers.append("set-cookie", cookie);
+	}
+	const locationRewrite = opts.locationRewrite ?? true;
+	if (locationRewrite !== false && (locationRewrite !== true || target[0] !== "/")) rewriteLocationHeaders(headers, locationRewrite, target[0] === "/" ? void 0 : new URL(target).origin, event.url.origin);
+	if (opts.onResponse) await opts.onResponse(event, response);
+	return new HTTPResponse(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers
+	});
+}
+function getProxyRequestHeaders(event, opts) {
+	const headers = new NullProtoObj();
+	const filterHeaders = opts?.filterHeaders?.map((h) => h.toLowerCase());
+	const forwardHeaders = opts?.forwardHeaders?.map((h) => h.toLowerCase());
+	const connectionNominated = connectionTokens(event.req.headers.get("connection"));
+	for (const [name, value] of event.req.headers.entries()) {
+		if (filterHeaders?.includes(name)) continue;
+		if (forwardHeaders?.includes(name) && !framingHeaders.has(name) && !connectionNominated.has(name)) {
+			headers[name] = value;
+			continue;
+		}
+		if (connectionNominated.has(name)) continue;
+		if (!ignoredHeaders.has(name) || name === "host" && opts?.host) {
+			headers[name] = value;
+			continue;
+		}
+	}
+	return headers;
+}
+function createSubRequest(event, path, init) {
+	const url = new URL(path.replace(LEADING_SEPARATOR_RUN_RE$1, "/"), event.url);
+	if (init.body != null && init.duplex === void 0) init = {
+		...init,
+		duplex: "half"
+	};
+	const req = new Request(url, init);
+	req.runtime = event.req.runtime;
+	req.waitUntil = event.req.waitUntil;
+	req.ip = event.req.ip;
+	return req;
+}
+var LEADING_SEPARATOR_RUN_RE$1 = /^(?:[/\\]|[\t\n\r])+/;
 // ../../node_modules/.pnpm/h3@2.0.8_crossws@0.4.17_srvx@1.0.8__ocache@0.3.2/node_modules/h3/dist/path.mjs
 var DOT_SEGMENT_SRC = String.raw`(?:^|/)(?:\.|%(?:25)*2e){1,2}(?:/|$)`;
 var ENCODED_SEP_SRC = String.raw`%(?:25)*(?:2f|5c)`;
@@ -891,6 +1156,24 @@ function mergedCanonicalPath(pathname, canonical) {
 	const merged = resolveDotSegments(pathname, MERGED_OPTS);
 	return merged === canonical ? void 0 : merged;
 }
+function isPathInScope(pathname, base) {
+	if (!base) return true;
+	if (!isEveryCanonicalReadingInScope(pathname, base)) return false;
+	const decoded = decodedPath(pathname);
+	return decoded === pathname || isEveryCanonicalReadingInScope(decoded, base);
+}
+function isPathInServedScope(pathname, base) {
+	const decodedBase = decodedPath(base);
+	if (decodedBase === base) return isPathInScope(pathname, base);
+	return isEveryCanonicalReadingInScope(pathname, base) && isEveryCanonicalReadingInScope(decodedPath(pathname), decodedBase);
+}
+function isEveryCanonicalReadingInScope(pathname, base) {
+	if (!needsCanonicalPasses(pathname)) return isCanonicalInScope(pathname, base);
+	return isCanonicalInScope(canonicalPath(pathname), base) && isCanonicalInScope(resolveDotSegments(pathname, MERGED_OPTS), base);
+}
+function isCanonicalInScope(canonical, base) {
+	return canonical === base || canonical.startsWith(base + "/");
+}
 function hasDecodableEscape(value) {
 	for (let i = value.indexOf("%"); i !== -1; i = value.indexOf("%", i + 1)) {
 		const byte = escapeByte(value, nestingEnd(value, i));
@@ -926,6 +1209,146 @@ function hexDigit(code) {
 	if (code >= 97 && code <= 102) return code - 87;
 	if (code >= 65 && code <= 70) return code - 55;
 	return -1;
+}
+var QUERY_UNSAFE_RE = /[#&+;=?]/g;
+var asQueryValue = (tail) => tail.replace(QUERY_UNSAFE_RE, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+var asPath = (tail) => tail;
+var AUTHORITY_RE = /^(?:[a-z][a-z\d+.-]*:[/\\]*|[/\\]{2,})[^/\\?#]*/i;
+function authorityEnd(target) {
+	return AUTHORITY_RE.exec(target)?.[0].length ?? 0;
+}
+function parseSplatTemplate(target) {
+	let index = target.indexOf("**");
+	if (index === -1 || index <= authorityEnd(target)) return;
+	const marker = target.search(/[?#]/);
+	const valueStart = marker === -1 ? Number.POSITIVE_INFINITY : marker;
+	const literals = [];
+	const encoders = [];
+	let last = 0;
+	for (; index !== -1; index = target.indexOf("**", last)) {
+		literals.push(target.slice(last, index));
+		encoders.push(index > valueStart ? asQueryValue : asPath);
+		last = index + 2;
+	}
+	literals.push(target.slice(last));
+	return {
+		literals,
+		encoders
+	};
+}
+function interpolateSplat(template, tail) {
+	const { literals, encoders } = template;
+	let resolved = literals[0];
+	for (let i = 0; i < encoders.length; i++) resolved += encoders[i](tail) + literals[i + 1];
+	return resolved;
+}
+var LEADING_SEPARATOR_RUN_RE = /^(?:[/\\]|%(?:25)*(?:2f|5c))+/i;
+var DYNAMIC_PATTERN_RE = /[:*()\\]/;
+var VARIABLE_WIDTH_SEGMENT_RE = /^\*\*|^:.*[?*+]$/;
+function prepareRuleTarget(options) {
+	const target = options?.to;
+	if (!target) return;
+	const base = options?.base;
+	if (target.endsWith("/**")) {
+		const baseTarget = target.slice(0, -3);
+		const baseTargetPath = targetBasePath(baseTarget);
+		const resolveTail = prepareTailResolver(base);
+		return (event) => {
+			const resolved = joinURL(baseTarget, resolveTail(event) + event.url.search);
+			assertTargetInScope(resolved, baseTargetPath);
+			return resolved;
+		};
+	}
+	const template = base === void 0 ? void 0 : parseSplatTemplate(target);
+	if (template) {
+		const prefix = template.literals[0];
+		const baseTargetPath = targetBasePath(prefix);
+		const resolveTail = prepareTailResolver(base);
+		return (event) => {
+			const resolved = interpolateSplat(template, resolveTail(event).slice(1));
+			assertTargetInScope(resolved, baseTargetPath);
+			assertTargetOrigin(resolved, prefix, event.url);
+			return appendSearch(resolved, event.url.search);
+		};
+	}
+	return (event) => appendSearch(target, event.url.search);
+}
+function prepareTailResolver(base) {
+	const baseSegments = base && DYNAMIC_PATTERN_RE.test(base) ? patternSegmentCount(base) : 0;
+	return (event) => {
+		const rawPath = event.url.pathname;
+		let scopeBase = base;
+		if (baseSegments) {
+			scopeBase = leadingSegments(rawPath, baseSegments);
+			if (scopeBase === void 0) throw new HTTPError({ status: 400 });
+		}
+		if (!scopeBase) return rawPath.replace(LEADING_SEPARATOR_RUN_RE, "/");
+		if (!isLiterallyInScope(rawPath, scopeBase)) {
+			const decoded = decodedPath(rawPath);
+			const derived = decoded === rawPath || !isLiterallyInScope(decoded, decodedPath(scopeBase)) ? void 0 : leadingSegments(rawPath, countSegments(scopeBase));
+			if (derived === void 0) throw new HTTPError({ status: 400 });
+			scopeBase = derived;
+		}
+		return withoutBase(rawPath, scopeBase);
+	};
+}
+function targetBasePath(prefix) {
+	const path = getURLPathname(prefix);
+	return path.endsWith("/") ? path.slice(0, -1) : path;
+}
+function appendSearch(target, search) {
+	if (!search) return target;
+	const hashIndex = target.indexOf("#");
+	const targetBase = hashIndex === -1 ? target : target.slice(0, hashIndex);
+	const targetHash = hashIndex === -1 ? "" : target.slice(hashIndex);
+	return targetBase + (targetBase.includes("?") ? targetBase.endsWith("?") || targetBase.endsWith("&") ? "" : "&" : "?") + search.slice(1) + targetHash;
+}
+function assertTargetInScope(resolved, baseTargetPath) {
+	if (!isFinalTargetInScope(getURLPathname(resolved), baseTargetPath)) throw new HTTPError({ status: 400 });
+}
+function assertTargetOrigin(resolved, prefix, url) {
+	let expected;
+	let actual;
+	try {
+		expected = new URL(prefix, url);
+		actual = new URL(resolved, url);
+	} catch {
+		throw new HTTPError({ status: 400 });
+	}
+	if (expected.origin !== actual.origin || expected.protocol !== actual.protocol) throw new HTTPError({ status: 400 });
+}
+function isFinalTargetInScope(pathname, baseTargetPath) {
+	if (baseTargetPath) return isPathInScope(pathname, baseTargetPath);
+	const run = LEADING_SEPARATOR_RUN_RE.exec(pathname);
+	return run === null || run[0] === "/";
+}
+function isLiterallyInScope(pathname, base) {
+	return isPathInServedScope(pathname, base) && (pathname === base || pathname.startsWith(base + "/"));
+}
+function patternSegmentCount(base) {
+	const segments = splitSegments(base);
+	let depth = 0;
+	for (const segment of segments) {
+		if (VARIABLE_WIDTH_SEGMENT_RE.test(segment)) return 0;
+		for (let i = 0; i < segment.length; i++) if (segment[i] === "{") depth++;
+		else if (segment[i] === "}") depth--;
+		if (depth !== 0) return 0;
+	}
+	return segments.length;
+}
+function countSegments(base) {
+	return splitSegments(base).length;
+}
+function splitSegments(base) {
+	return (base.startsWith("/") ? base.slice(1) : base).split("/");
+}
+function leadingSegments(pathname, count) {
+	let index = 0;
+	for (let i = 0; i < count; i++) {
+		index = pathname.indexOf("/", index + 1);
+		if (index === -1) return i === count - 1 ? pathname : void 0;
+	}
+	return pathname.slice(0, index);
 }
 // ../../node_modules/.pnpm/h3@2.0.8_crossws@0.4.17_srvx@1.0.8__ocache@0.3.2/node_modules/h3/dist/normalize.mjs
 function recordResets(resets, resetEntries, routeRules, canOverride) {
@@ -1214,4 +1637,16 @@ var compareRuleOrder = (a, b) => orderWeight(a[1].handler) - orderWeight(b[1].ha
 function orderWeight(handler) {
 	return handler?.order ?? 0;
 }
-export { H3Core, HTTPError, NodeResponse, composeMiddleware, createMatcherFromFind, defineHandler, defineLazyEventHandler, headers, memoizeRouteRulesMatcher, toEventHandler, toRequest };
+// ../../node_modules/.pnpm/h3@2.0.8_crossws@0.4.17_srvx@1.0.8__ocache@0.3.2/node_modules/h3/dist/rules/proxy.mjs
+var proxy = {
+	order: 2,
+	handler: (m) => {
+		const options = m.options;
+		const resolveTarget = prepareRuleTarget(options);
+		if (!resolveTarget) return function proxyRouteRule() {};
+		return function proxyRouteRule(event) {
+			return proxyRequest(event, resolveTarget(event), { ...options });
+		};
+	}
+};
+export { H3Core, HTTPError, NodeResponse, composeMiddleware, createMatcherFromFind, defineHandler, defineLazyEventHandler, headers, memoizeRouteRulesMatcher, proxy, toEventHandler, toRequest };
