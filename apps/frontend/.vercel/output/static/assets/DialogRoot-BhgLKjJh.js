@@ -1,0 +1,1 @@
+import{en as e,n as t}from"./DialogTitle-BYpsCKs5.js";var n=e(function(e){return t(`dialog`,e)});export{n as t};

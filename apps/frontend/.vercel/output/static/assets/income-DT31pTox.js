@@ -1,0 +1,1 @@
+import{t as e}from"./type-ledger-page-BkDb5nu4.js";import{t}from"./jsx-runtime-LKYXHABd.js";var n=t(),r=()=>(0,n.jsx)(e,{type:`income`});export{r as component};

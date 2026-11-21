@@ -1,0 +1,1 @@
+import{r as e}from"./rolldown-runtime-XKyaHtl9.js";import{G as t}from"./dist-BXl3nY0u.js";var n=e(t(),1),r=(0,n.createContext)(null);function i(){let e=(0,n.useContext)(r);if(!e)throw Error(`useTxDialog must be used inside TxDialogProvider`);return e}export{i as n,r as t};
