@@ -1,1 +1,0 @@
-import{A as e,M as t,j as n}from"./index-BmpbECQ-.js";function r(){return{user:t(e=>e.user),loading:t(e=>e.loading),refresh:e,signOut:n}}export{r as t};

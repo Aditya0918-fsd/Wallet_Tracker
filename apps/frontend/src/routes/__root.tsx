@@ -12,7 +12,7 @@ import appCss from "@/index.css?url";
 
 const FONTS_HREF = "https://fonts.googleapis.com/css2?family=Manrope:wght@300..800&family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Serif:ital@0;1&display=swap";
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({ meta: [{ charSet: "utf-8" }, { name: "viewport", content: "width=device-width, initial-scale=1.0" }, { title: site.name }, { name: "description", content: site.tagline }], links: [{ rel: "icon", href: "/favicon.ico" }, { rel: "preconnect", href: "https://fonts.googleapis.com" }, { rel: "stylesheet", href: FONTS_HREF }, { rel: "stylesheet", href: appCss }] }),
+  head: () => ({ meta: [{ charSet: "utf-8" }, { name: "viewport", content: "width=device-width, initial-scale=1.0" }, { title: site.name }, { name: "description", content: site.tagline }, { name: "theme-color", content: "#0a1411" }, { name: "theme-color", content: "#0a1411" }, { name: "theme-color", content: "#0a1411" }], links: [{ rel: "icon", href: "/favicon.ico" }, { rel: "manifest", href: "/manifest.webmanifest" }, { rel: "apple-touch-icon", href: "/apple-touch-icon.png" }, { rel: "manifest", href: "/manifest.webmanifest" }, { rel: "apple-touch-icon", href: "/apple-touch-icon.png" }, { rel: "preconnect", href: "https://fonts.googleapis.com" }, { rel: "stylesheet", href: FONTS_HREF }, { rel: "stylesheet", href: appCss }] }),
   errorComponent: RootRouteError,
   notFoundComponent: NotFound,
   component: RootComponent,
