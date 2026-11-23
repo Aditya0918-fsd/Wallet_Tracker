@@ -1,1 +1,0 @@
-import{t as e}from"./jsx-runtime-LKYXHABd.js";var t=e(),n=()=>(0,t.jsx)(`div`,{className:`grid min-h-screen place-items-center text-sm text-muted-foreground`,children:`Completing sign-in…`});export{n as component};

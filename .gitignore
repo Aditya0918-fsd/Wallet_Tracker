@@ -11,3 +11,4 @@ coverage
 .dev.vars*
 
 client_secret*.json
+.vercel
