@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.wallet_tracker_nine_hazel.twa",
+        "sha256_cert_fingerprints": ["85:12:D6:A8:B6:32:39:1F:EC:B5:49:41:CD:A8:84:D0:B5:AB:98:22:53:83:66:D9:63:61:4B:F9:CA:FA:53:08"]
+      }
+    }]
