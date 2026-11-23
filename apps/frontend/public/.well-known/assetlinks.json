@@ -3,6 +3,6 @@
       "target": {
         "namespace": "android_app",
         "package_name": "app.vercel.wallet_tracker_nine_hazel.twa",
-        "sha256_cert_fingerprints": ["85:12:D6:A8:B6:32:39:1F:EC:B5:49:41:CD:A8:84:D0:B5:AB:98:22:53:83:66:D9:63:61:4B:F9:CA:FA:53:08"]
+        "sha256_cert_fingerprints": ["CD:E1:E4:0E:58:FB:2B:13:19:51:CB:42:83:D3:43:79:DD:E1:DF:A0:97:FF:A4:61:AF:10:05:36:70:A9:C6:D5"]
       }
     }]
