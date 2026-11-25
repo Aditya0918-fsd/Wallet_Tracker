@@ -15,7 +15,12 @@ export async function refreshAuth() {
 }
 
 export async function signOut(options?: { returnTo?: string }) {
-  await apiRequest("/auth/logout", { method: "POST" });
+  try {
+    await apiRequest("/auth/logout", { method: "POST" });
+  } catch {
+    // ignore logout error to ensure local session is cleared
+  }
   useAuthStore.getState().setUser(null);
-  if (options?.returnTo) window.location.assign(options.returnTo);
+  useAuthStore.getState().setLoading(false);
+  window.location.assign(options?.returnTo || "/auth/sign-in");
 }

@@ -14,7 +14,14 @@ function SignInPage(){
  const[register,setRegister]=useState(false);const[busy,setBusy]=useState(false);const[resending,setResending]=useState(false);
  const oauthErrorShown=useRef(false);
  const[name,setName]=useState("");const[email,setEmail]=useState("");const[password,setPassword]=useState("");const[verifyNeeded,setVerifyNeeded]=useState(false);
- const{refresh}=useAuth();const navigate=useNavigate();
+ const{user,loading,refresh}=useAuth();const navigate=useNavigate();
+ useEffect(()=>{
+  if(!loading&&user){
+   const params=new URLSearchParams(window.location.search);
+   const returnTo=params.get("returnTo")||"/dashboard";
+   void navigate({to:returnTo,replace:true});
+  }
+ },[user,loading,navigate]);
  useEffect(()=>{if(oauthErrorShown.current)return;const params=new URLSearchParams(window.location.search);if(params.get("error")==="google-sign-in-failed"){oauthErrorShown.current=true;toast.error("Google sign-in could not be completed. If you already have an account, sign in to it first.");params.delete("error");window.history.replaceState(null,"",window.location.pathname+(params.size?"?"+params.toString():""));}},[]);
  async function submit(event:React.FormEvent<HTMLFormElement>){
   event.preventDefault();setBusy(true);setVerifyNeeded(false);
@@ -26,7 +33,10 @@ function SignInPage(){
   finally{setBusy(false);}
  }
  async function resend(){setResending(true);try{const response=await apiRequest<{message:string}>("/auth/resend-verification",{method:"POST",body:JSON.stringify({email})});toast.success(response.message);}catch(error){toast.error(error instanceof Error?error.message:"Could not resend verification.");}finally{setResending(false);}}
- return <main className="grid min-h-screen place-items-center bg-background px-4 py-10"><div className="w-full max-w-md space-y-6"><Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4"/>Back to Wallet Tracker</Link><div className="rounded-2xl border bg-card p-7 shadow-sm sm:p-9"><div className="mb-7 flex flex-col items-center gap-4"><Logo/><div className="text-center"><h1 className="font-display text-2xl font-semibold">{register?"Create your account":"Welcome back"}</h1><p className="mt-1 text-sm text-muted-foreground">{register?"Start keeping your finances in one place.":"Sign in to access your private wallet."}</p></div></div>
+ if(loading||user){
+  return <main className="grid min-h-screen place-items-center bg-background px-4 py-10"><Loader2 className="size-8 animate-spin text-primary"/></main>;
+ }
+ return <main className="grid min-h-screen place-items-center bg-background px-4 py-10"><div className="w-full max-w-md space-y-6"><div className="rounded-2xl border bg-card p-7 shadow-sm sm:p-9"><div className="mb-7 flex flex-col items-center gap-4"><Logo/><div className="text-center"><h1 className="font-display text-2xl font-semibold">{register?"Create your account":"Welcome back"}</h1><p className="mt-1 text-sm text-muted-foreground">{register?"Start keeping your finances in one place.":"Sign in to access your private wallet."}</p></div></div>
  <form onSubmit={e=>void submit(e)} className="space-y-4">{register&&<div className="space-y-2"><Label htmlFor="name">Name</Label><div className="relative"><UserRound className="absolute left-3 top-3 size-4 text-muted-foreground"/><Input id="name" required minLength={1} maxLength={80} autoComplete="name" className="pl-9" value={name} onChange={e=>setName(e.target.value)}/></div></div>}
  <div className="space-y-2"><Label htmlFor="email">Email</Label><div className="relative"><Mail className="absolute left-3 top-3 size-4 text-muted-foreground"/><Input id="email" type="email" required autoComplete="email" className="pl-9" value={email} onChange={e=>setEmail(e.target.value)}/></div></div>
  <div className="space-y-2"><Label htmlFor="password">Password</Label><div className="relative"><LockKeyhole className="absolute left-3 top-3 size-4 text-muted-foreground"/><Input id="password" type="password" required minLength={10} maxLength={128} autoComplete={register?"new-password":"current-password"} className="pl-9" value={password} onChange={e=>setPassword(e.target.value)}/></div>{register&&<p className="text-xs text-muted-foreground">Use at least 10 characters.</p>}</div>

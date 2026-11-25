@@ -283,8 +283,9 @@ export class AuthController {
     const previous = req.cookies?.wallet_session;
     if (previous) await this.sessions.deleteOne({ tokenHash: hash(previous) });
     const token = randomBytes(32).toString("base64url");
-    await this.sessions.create({ userId, tokenHash: hash(token), expiresAt: new Date(Date.now() + 14 * 86400000), userAgent: req.headers["user-agent"] });
-    const options = { path: "/", sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", maxAge: 14 * 86400 };
+    const expires = new Date(Date.now() + 14 * 86400000);
+    await this.sessions.create({ userId, tokenHash: hash(token), expiresAt: expires, userAgent: req.headers["user-agent"] });
+    const options = { path: "/", sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", maxAge: 14 * 86400, expires };
     res.setCookie("wallet_session", token, { ...options, httpOnly: true });
     res.setCookie("wallet_csrf", randomBytes(32).toString("base64url"), { ...options, httpOnly: false });
   }

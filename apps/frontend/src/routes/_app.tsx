@@ -1,10 +1,7 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { ShieldCheck } from "lucide-react";
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import AppShell from "@/components/app-shell.tsx";
-import Logo from "@/components/logo.tsx";
 import WalletProvider from "@/components/providers/wallet.tsx";
-import { Card } from "@/components/ui/card.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import TxDialogProvider from "@/components/wallet/tx-dialog-provider.tsx";
 import { useAuth } from "@/hooks/use-auth.ts";
@@ -32,22 +29,20 @@ function ShellSkeleton() {
 }
 
 function AppLayout() {
-  const { user } = useAuth();
-  if (!user) {
-    return (
-      <div className="grid min-h-screen place-items-center bg-background px-4">
-        <Card className="w-full max-w-sm items-center gap-5 px-8 py-10 text-center">
-          <Logo />
-          <ShieldCheck className="size-8 text-primary" />
-          <div className="space-y-1">
-            <h1 className="font-display text-xl font-semibold">Sign in to continue</h1>
-            <p className="text-sm text-muted-foreground">Your financial dashboard is private to your account.</p>
-          </div>
-          <SignInButton className="w-full" signInText="Sign in with Google or email" />
-        </Card>
-      </div>
-    );
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/dashboard";
+      void navigate({ to: "/auth/sign-in", search: { returnTo }, replace: true });
+    }
+  }, [user, loading, navigate]);
+
+  if (loading || !user) {
+    return <ShellSkeleton />;
   }
+
   const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email.split("@")[0] || "You";
   return (
     <WalletProvider userId={user.id} name={name} email={user.email} fallback={<ShellSkeleton />}>
